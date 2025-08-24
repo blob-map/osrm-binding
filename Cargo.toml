@@ -1,6 +1,6 @@
 [package]
 name = "osrm-binding"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2024"
 authors = ["Mathias Vandaele <contactvandaele@gmail.com>"]
 publish = true
@@ -28,7 +28,7 @@ flate2 = "1.1.2"
 tar = "0.4.44"
 
 [dev-dependencies]
-criterion = "0.6.0"
+criterion = "0.7.0"
 rand = "0.9.2"
 
 [[bench]]

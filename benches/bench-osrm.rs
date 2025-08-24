@@ -90,6 +90,30 @@ fn calculate_table_10_successfully_mld(c: &mut Criterion) {
     });
 }
 
+fn calculate_table_10_successfully_ch(c: &mut Criterion) {
+    dotenv().expect(".env file could not be read");
+    let path = env::var("OSRM_TEST_DATA_PATH_CH")
+        .expect("Environment variable OSRM_TEST_DATA_PATH_MLD must be defined with a french map");
+    let engine = OsrmEngine::new(&*path, Algorithm::CH).expect("Failed to initialize OSRM engine");
+
+    let base_lat = 48.8566;
+    let base_lon = 2.3522;
+    let mut rng = rand::rng();
+
+    c.bench_function("calculate_table_10_successfully_ch", |b| {
+        b.iter(|| {
+            let request = TableRequest {
+                sources: vec![
+                    Point { longitude: base_lon, latitude: base_lat }
+                ],
+                destinations: (0..10).map( |_| Point { longitude: base_lon + rng.random_range(-0.1..0.1), latitude: base_lat + rng.random_range(-0.1..0.1) }).collect(),
+            };
+
+            let _response = engine.table(request.clone()).expect("Table request failed");
+        });
+    });
+}
+
 fn calculate_table_100_successfully_mld(c: &mut Criterion) {
     dotenv().expect(".env file could not be read");
     let path = env::var("OSRM_TEST_DATA_PATH_MLD")
@@ -101,6 +125,30 @@ fn calculate_table_100_successfully_mld(c: &mut Criterion) {
     let mut rng = rand::rng();
 
     c.bench_function("calculate_table_100_successfully_mld", |b| {
+        b.iter(|| {
+            let request = TableRequest {
+                sources: vec![
+                    Point { longitude: base_lon, latitude: base_lat }
+                ],
+                destinations: (0..100).map( |_| Point { longitude: base_lon + rng.random_range(-0.1..0.1), latitude: base_lat + rng.random_range(-0.1..0.1) }).collect(),
+            };
+
+            let _response = engine.table(request.clone()).expect("Table request failed");
+        });
+    });
+}
+
+fn calculate_table_100_successfully_ch(c: &mut Criterion) {
+    dotenv().expect(".env file could not be read");
+    let path = env::var("OSRM_TEST_DATA_PATH_CH")
+        .expect("Environment variable OSRM_TEST_DATA_PATH_MLD must be defined with a french map");
+    let engine = OsrmEngine::new(&*path, Algorithm::CH).expect("Failed to initialize OSRM engine");
+
+    let base_lat = 48.8566;
+    let base_lon = 2.3522;
+    let mut rng = rand::rng();
+
+    c.bench_function("calculate_table_100_successfully_ch", |b| {
         b.iter(|| {
             let request = TableRequest {
                 sources: vec![
@@ -239,7 +287,9 @@ criterion_group!(benches,
     calculate_route_successfully,
     calculate_simple_route_successfully,
     calculate_table_10_successfully_mld,
+    calculate_table_10_successfully_ch,
     calculate_table_100_successfully_mld,
+    calculate_table_100_successfully_ch,
     calculate_multiple_routes_around_paris_10km_mld,
     calculate_multiple_routes_around_paris_100km_mld,
     calculate_multiple_routes_around_paris_10km_ch,
