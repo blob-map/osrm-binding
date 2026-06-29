@@ -91,11 +91,19 @@ CMD ["./my-bin"]
 
 ### Initialization
 
-Initialize the OSRM engine with a preprocessed OSRM data file (e.g., generated via `osrm-extract` and `osrm-contract`):
+Initialize the OSRM engine with a preprocessed OSRM data file. The `Algorithm` you pass **must match the preprocessing pipeline** used to build the `.osrm` files:
+
+- **CH (Contraction Hierarchies):** `osrm-extract` → `osrm-contract`, then use `Algorithm::CH`
+- **MLD (Multi-Level Dijkstra):** `osrm-extract` → `osrm-partition` → `osrm-customize`, then use `Algorithm::MLD`
 
 ```rust
 use osrm_binding::{OsrmEngine, Algorithm};
 
+// Data prepared with osrm-contract:
+let engine = OsrmEngine::new("/path/to/france-latest.osrm", Algorithm::CH)
+    .expect("Failed to initialize OSRM engine");
+
+// Or, data prepared with osrm-partition + osrm-customize:
 let engine = OsrmEngine::new("/path/to/france-latest.osrm", Algorithm::MLD)
     .expect("Failed to initialize OSRM engine");
 ```
@@ -181,7 +189,7 @@ export OSRM_TEST_DATA_PATH="/absolute/path/to/france-latest.osrm"
 cargo test
 ```
 
-Ensure your `.osrm` file is prepared using `osrm-extract` and `osrm-contract`.
+Ensure your `.osrm` file is prepared with a pipeline matching the `Algorithm` you initialize the engine with: `osrm-extract` + `osrm-contract` for `Algorithm::CH`, or `osrm-extract` + `osrm-partition` + `osrm-customize` for `Algorithm::MLD`.
 
 ### 🚀 Performance
 
