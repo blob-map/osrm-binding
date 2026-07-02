@@ -5,9 +5,19 @@ use std::path::{Path, PathBuf};
 fn main() {
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
 
-    let osrm_url = "https://github.com/Project-OSRM/osrm-backend/archive/refs/tags/v6.0.0.tar.gz";
+    // The OSRM version this crate links against must match the version of the
+    // osrm-extract/partition/customize tools used to prepare the `.osrm` files,
+    // otherwise OSRM refuses to load them ("File is incompatible with this
+    // version of OSRM"). Override via OSRM_BACKEND_REF with any git ref
+    // (tag, branch, or commit hash) from Project-OSRM/osrm-backend.
+    println!("cargo:rerun-if-env-changed=OSRM_BACKEND_REF");
+    let osrm_ref = std::env::var("OSRM_BACKEND_REF").unwrap_or_else(|_| "v6.0.0".to_string());
+    let osrm_url = format!(
+        "https://github.com/Project-OSRM/osrm-backend/archive/{}.tar.gz",
+        osrm_ref
+    );
 
-    eprintln!("Downloading OSRM source from {}...", osrm_url);
+    eprintln!("Downloading OSRM source ({}) from {}...", osrm_ref, osrm_url);
 
     let mut response = reqwest::blocking::get(osrm_url).unwrap();
     let mut buffer = Vec::new();

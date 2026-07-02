@@ -87,6 +87,16 @@ CMD ["./my-bin"]
 
 > **Note**: Replace `my-bin` with your actual binary name. This Dockerfile installs OSRM build dependencies and runtime libraries.
 
+### OSRM version
+
+By default this crate downloads and links **osrm-backend `v6.0.0`**. OSRM stamps a version fingerprint into the preprocessed `.osrm.*` files and refuses to load data prepared by a different version (`File is incompatible with this version of OSRM ...`). **The version that prepared your data must match the version this crate links against.**
+
+If your `.osrm` files were generated with a different OSRM version, either regenerate them with `v6.0.0`, or build this crate against the matching version using the `OSRM_BACKEND_REF` environment variable (any git tag, branch, or commit hash from `Project-OSRM/osrm-backend`):
+
+```shell
+OSRM_BACKEND_REF=v5.27.1 cargo build
+```
+
 ## 🛠️ Usage
 
 ### Initialization
