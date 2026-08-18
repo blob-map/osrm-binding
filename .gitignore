@@ -15,6 +15,7 @@ build
 *.log
 
 .env
+/.test-data/
 
 # OS
 .DS_Store

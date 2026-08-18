@@ -21,6 +21,17 @@ cargo add osrm-binding
 
 This library requires OSRM to be built and linked. Below are instructions for setting up the dependencies.
 
+#### Nix development shell
+
+With [Nix](https://nixos.org/) and flakes enabled, enter a shell containing Rust and all native OSRM build dependencies:
+
+```shell
+nix develop
+cargo build
+```
+
+The first Cargo build downloads and compiles the OSRM source, so it can take a few minutes. To use a different OSRM version, set `OSRM_BACKEND_REF` as described below before running Cargo.
+
 #### Local Installation (Ubuntu 24.04)
 
 Install the required system dependencies:
@@ -192,14 +203,16 @@ println!("{:?}", trip);
 
 ## 🔬 Tests
 
-To run the tests, set the environment variable for your OSRM data file and execute:
+The test suite uses routes between Paris, Lyon, and Marseille. From the Nix development shell, download the current France extract, prepare a shared OSRM v6.0.0 dataset for both MLD and CH, and populate `.env` automatically:
 
 ```shell
-export OSRM_TEST_DATA_PATH="/absolute/path/to/france-latest.osrm"
+setup-test-data
 cargo test
 ```
 
-Ensure your `.osrm` file is prepared with a pipeline matching the `Algorithm` you initialize the engine with: `osrm-extract` + `osrm-contract` for `Algorithm::CH`, or `osrm-extract` + `osrm-partition` + `osrm-customize` for `Algorithm::MLD`.
+The first setup downloads and processes the full France dataset, so expect substantial disk, memory, and processing-time requirements. Downloads resume if interrupted, and completed data is reused on subsequent runs. The generated files live in `.test-data/` and are ignored by Git.
+
+To use data you prepared yourself instead, create `.env` with `OSRM_TEST_DATA_PATH_MLD` and `OSRM_TEST_DATA_PATH_CH`. The dataset version must match the linked OSRM version, and each path must use the preprocessing pipeline matching its algorithm.
 
 ### 🚀 Performance
 
