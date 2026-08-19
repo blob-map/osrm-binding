@@ -7,7 +7,7 @@ use crate::point::Point;
 use crate::route::{RouteRequest, RouteResponse, SimpleRouteResponse};
 use crate::tables::{TableRequest, TableResponse};
 use crate::trip::{TripRequest, TripResponse};
-use crate::{Osrm, algorithm};
+use crate::{algorithm, Osrm};
 
 pub struct OsrmEngine {
     instance: Osrm,
@@ -68,8 +68,8 @@ impl OsrmEngine {
     pub fn trip(&self, trip_request: impl Borrow<TripRequest>) -> Result<TripResponse, OsrmError> {
         let trip_request = trip_request.borrow();
         let len = trip_request.points.len();
-        if len == 0 {
-            return Err(OsrmError::InvalidTableArgument);
+        if len < 2 {
+            return Err(OsrmError::InvalidTripArgument);
         }
         let mut coordinates = Vec::with_capacity(len * 2);
         for point in &trip_request.points {
@@ -101,6 +101,7 @@ mod tests {
     use crate::algorithm::Algorithm;
     use crate::route::RouteRequestBuilder;
     use crate::tables::Point;
+    use crate::trip::TripRequest;
     #[test]
     fn it_calculates_a_table_successfully() {
         dotenvy::dotenv().expect(".env file could not be read");
@@ -224,5 +225,61 @@ mod tests {
         println!("{:?}", response);
         assert!(700.0 < (response.distance / 1000.0) && (response.distance / 1000.0) < 800.0); // between 700 and 800 km (google map used)
         assert!(27000.0 < response.durations && response.durations < 30600.0); // between 7h30 and 8h30 (google map used)
+    }
+
+    #[test]
+    fn it_calculates_a_bicycle_trip_successfully() {
+        dotenvy::dotenv().expect(".env file could not be read");
+        let request = TripRequest {
+            points: vec![
+                Point {
+                    longitude: 2.2945,
+                    latitude: 48.8584,
+                }, // Eiffel Tower
+                Point {
+                    longitude: 2.3364,
+                    latitude: 48.8606,
+                }, // Louvre Museum
+                Point {
+                    longitude: 2.3690,
+                    latitude: 48.8530,
+                }, // Place de la Bastille
+            ],
+        };
+
+        for (path_variable, algorithm) in [
+            ("OSRM_TEST_DATA_PATH_BICYCLE_MLD", Algorithm::MLD),
+            ("OSRM_TEST_DATA_PATH_BICYCLE_CH", Algorithm::CH),
+        ] {
+            let path = std::env::var(path_variable).unwrap_or_else(|_| {
+                panic!(
+                    "Environment variable {path_variable} must be defined with a French bicycle map"
+                )
+            });
+            let engine =
+                OsrmEngine::new(&path, algorithm).expect("Failed to initialize bicycle engine");
+            let response = engine.trip(&request).expect("Bicycle trip request failed");
+
+            assert_eq!(response.code, "Ok");
+            assert_eq!(response.trips.len(), 1);
+            assert_eq!(response.waypoints.len(), request.points.len());
+
+            let trip = &response.trips[0];
+            assert_eq!(trip.legs.len(), request.points.len());
+            assert!(trip.distance > 0.0);
+            assert!(trip.duration > 0.0);
+
+            let mut optimized_positions = response
+                .waypoints
+                .iter()
+                .map(|waypoint| waypoint.waypoint_index)
+                .collect::<Vec<_>>();
+            optimized_positions.sort_unstable();
+            assert_eq!(optimized_positions, vec![0, 1, 2]);
+            assert!(response
+                .waypoints
+                .iter()
+                .all(|waypoint| waypoint.trips_index == 0));
+        }
     }
 }

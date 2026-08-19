@@ -184,21 +184,34 @@ println!("Duration: {}s, Distance: {}m", result.duration, result.distance);
 
 ### Trip API
 
-Optimize a trip with multiple waypoints:
+The transport profile is part of the preprocessed dataset rather than the request. Load the bicycle dataset in a separate engine, then optimize a round trip with multiple waypoints:
 
 ```rust
-use osrm_binding::{TripRequest, Point};
+use osrm_binding::algorithm::Algorithm;
+use osrm_binding::osrm_engine::OsrmEngine;
+use osrm_binding::point::Point;
+use osrm_binding::trip::TripRequest;
+
+let bicycle_engine = OsrmEngine::new(
+    "/path/to/france-bicycle-latest",
+    Algorithm::MLD,
+).unwrap();
 
 let request = TripRequest {
     points: vec![
-        Point { longitude: 2.3522, latitude: 48.8566 },
-        Point { longitude: 4.8357, latitude: 45.7640 },
-        Point { longitude: 5.3698, latitude: 43.2965 },
+        Point { longitude: 2.2945, latitude: 48.8584 }, // Eiffel Tower
+        Point { longitude: 2.3364, latitude: 48.8606 }, // Louvre Museum
+        Point { longitude: 2.3690, latitude: 48.8530 }, // Bastille
     ],
 };
 
-let trip = engine.trip(&request).unwrap();
-println!("{:?}", trip);
+let response = bicycle_engine.trip(&request).unwrap();
+let trip = &response.trips[0];
+
+println!("Distance: {}m, duration: {}s", trip.distance, trip.duration);
+for waypoint in response.waypoints {
+    println!("Optimized position: {}", waypoint.waypoint_index);
+}
 ```
 
 ## 🔬 Tests

@@ -10,6 +10,8 @@ pub enum OsrmError {
     ApiError(String),
     #[error("Sources or destinations are invalid")]
     InvalidTableArgument,
+    #[error("A trip requires at least two points")]
+    InvalidTripArgument,
     #[error("Failed to parse OSRM response: {0}")]
     JsonParse(#[from] serde_json::Error),
     #[error("Internal FFI error: {0}")]
