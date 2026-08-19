@@ -1,7 +1,6 @@
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
-
 fn main() {
     println!("cargo:rerun-if-changed=src/wrapper.cpp");
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
@@ -18,7 +17,10 @@ fn main() {
         osrm_ref
     );
 
-    eprintln!("Downloading OSRM source ({}) from {}...", osrm_ref, osrm_url);
+    eprintln!(
+        "Downloading OSRM source ({}) from {}...",
+        osrm_ref, osrm_url
+    );
 
     let mut response = reqwest::blocking::get(osrm_url).unwrap();
     let mut buffer = Vec::new();
@@ -33,7 +35,8 @@ fn main() {
     let osrm_source_path = find_osrm_source(&out_dir);
     eprintln!("OSRM source path: {}", osrm_source_path.display());
 
-    let cxx_flags = "-Wno-array-bounds -Wno-uninitialized -Wno-stringop-overflow -std=c++17 -Wno-error";
+    let cxx_flags =
+        "-Wno-array-bounds -Wno-uninitialized -Wno-stringop-overflow -std=c++17 -Wno-error";
 
     let dst = cmake::Config::new(&osrm_source_path)
         .env("CXXFLAGS", cxx_flags)
@@ -77,14 +80,20 @@ fn main() {
     println!("cargo:rustc-link-lib=dylib=z");
     println!("cargo:rustc-link-lib=dylib=bz2");
     println!("cargo:rustc-link-lib=dylib=expat");
-
 }
 
 fn find_osrm_source(path: &Path) -> PathBuf {
     for entry in path.read_dir().expect("Failed to read directory") {
         let entry = entry.expect("Failed to read directory entry");
         let path = entry.path();
-        if path.is_dir() && path.file_name().unwrap().to_str().unwrap().starts_with("osrm-backend-") {
+        if path.is_dir()
+            && path
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("osrm-backend-")
+        {
             return path;
         }
     }

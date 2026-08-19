@@ -1,7 +1,4 @@
-use osrm_binding::algorithm::Algorithm;
-use osrm_binding::osrm_engine::OsrmEngine;
-use osrm_binding::point::Point;
-use osrm_binding::tables::TableRequest;
+use osrm_binding::{Algorithm, OsrmEngine, Point, TableRequest};
 use std::time::Instant;
 
 fn main() {
@@ -12,14 +9,12 @@ fn main() {
 
     let start = Instant::now(); // Capture start time
     (0..100).for_each(|_| {
-        let request = TableRequest {
-            sources: vec![
-                Point {
-                    longitude: 2.3522,
-                    latitude: 48.8566,
-                }, // Paris
-            ],
-            destinations: vec![
+        let request = TableRequest::new(
+            vec![Point {
+                longitude: 2.3522,
+                latitude: 48.8566,
+            }], // Paris
+            vec![
                 Point {
                     longitude: 5.3698,
                     latitude: 43.2965,
@@ -29,7 +24,7 @@ fn main() {
                     latitude: 45.7640,
                 }, // Lyon
             ],
-        };
+        );
         let _ = engine.table(request).expect("Table request failed");
     });
     let duration = start.elapsed(); // Calculate the elapsed time

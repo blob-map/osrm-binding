@@ -5,9 +5,9 @@ Rust bindings for [OSRM (Open Source Routing Machine)](http://project-osrm.org/)
 ## 🚀 Features
 
 - 🗺️ Calculate routes, trips, and distance/duration tables using OSRM
-- 🦀 Fully written in Rust
-- 💡 Simple and safe API for high-performance routing
-- 🧪 Includes integration tests for route and table APIs
+- 🦀 Safe Rust API backed by the native OSRM engine
+- 💡 Embedded, high-performance routing without an HTTP server
+- 🧪 Route, table, trip, CH, MLD, car, and bicycle coverage
 
 ## 📦 Installation
 
@@ -121,11 +121,11 @@ Initialize the OSRM engine with a preprocessed OSRM data file. The `Algorithm` y
 use osrm_binding::{OsrmEngine, Algorithm};
 
 // Data prepared with osrm-contract:
-let engine = OsrmEngine::new("/path/to/france-latest.osrm", Algorithm::CH)
+let engine = OsrmEngine::new("/path/to/france-latest", Algorithm::CH)
     .expect("Failed to initialize OSRM engine");
 
 // Or, data prepared with osrm-partition + osrm-customize:
-let engine = OsrmEngine::new("/path/to/france-latest.osrm", Algorithm::MLD)
+let engine = OsrmEngine::new("/path/to/france-latest", Algorithm::MLD)
     .expect("Failed to initialize OSRM engine");
 ```
 
@@ -134,13 +134,14 @@ let engine = OsrmEngine::new("/path/to/france-latest.osrm", Algorithm::MLD)
 Build and execute a route request:
 
 ```rust
-use osrm_binding::{RouteRequestBuilder, Point};
+use osrm_binding::{Point, RouteRequest};
 
-let request = RouteRequestBuilder::default()
+let request = RouteRequest::builder()
     .points(vec![
         Point { longitude: 2.3522, latitude: 48.8566 }, // Paris
         Point { longitude: 5.3698, latitude: 43.2965 }, // Marseille
     ])
+    .steps(true)
     .build()
     .unwrap();
 
@@ -155,13 +156,13 @@ Compute a distance/duration table:
 ```rust
 use osrm_binding::{TableRequest, Point};
 
-let request = TableRequest {
-    sources: vec![Point { longitude: 2.3522, latitude: 48.8566 }],
-    destinations: vec![
+let request = TableRequest::new(
+    vec![Point { longitude: 2.3522, latitude: 48.8566 }],
+    vec![
         Point { longitude: 5.3698, latitude: 43.2965 },
         Point { longitude: 4.8357, latitude: 45.7640 },
     ],
-};
+);
 
 let response = engine.table(&request).unwrap();
 println!("{:?}", response.durations);
@@ -187,23 +188,22 @@ println!("Duration: {}s, Distance: {}m", result.duration, result.distance);
 The transport profile is part of the preprocessed dataset rather than the request. Load the bicycle dataset in a separate engine, then optimize a round trip with multiple waypoints:
 
 ```rust
-use osrm_binding::algorithm::Algorithm;
-use osrm_binding::osrm_engine::OsrmEngine;
-use osrm_binding::point::Point;
-use osrm_binding::trip::TripRequest;
+use osrm_binding::{Algorithm, OsrmEngine, Point, TripRequest};
 
 let bicycle_engine = OsrmEngine::new(
     "/path/to/france-bicycle-latest",
     Algorithm::MLD,
 ).unwrap();
 
-let request = TripRequest {
-    points: vec![
+let request = TripRequest::builder()
+    .points(vec![
         Point { longitude: 2.2945, latitude: 48.8584 }, // Eiffel Tower
         Point { longitude: 2.3364, latitude: 48.8606 }, // Louvre Museum
         Point { longitude: 2.3690, latitude: 48.8530 }, // Bastille
-    ],
-};
+    ])
+    .steps(true)
+    .build()
+    .unwrap();
 
 let response = bicycle_engine.trip(&request).unwrap();
 let trip = &response.trips[0];
@@ -213,6 +213,8 @@ for waypoint in response.waypoints {
     println!("Optimized position: {}", waypoint.waypoint_index);
 }
 ```
+
+Trip requests are closed round trips and let OSRM choose the starting waypoint by default. For an open trip that preserves the first and last points, set `.roundtrip(false)`, `.source(TripSource::First)`, and `.destination(TripDestination::Last)` on the builder. Route and trip instructions are opt-in with `.steps(true)` so the default response stays smaller and faster to parse.
 
 ## 🔬 Tests
 

@@ -1,10 +1,6 @@
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use dotenvy::dotenv;
-use osrm_binding::algorithm::Algorithm;
-use osrm_binding::osrm_engine::OsrmEngine;
-use osrm_binding::point::Point;
-use osrm_binding::route::RouteRequestBuilder;
-use osrm_binding::tables::TableRequest;
+use osrm_binding::{Algorithm, OsrmEngine, Point, RouteRequest, TableRequest};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::env;
@@ -47,14 +43,12 @@ fn calculate_table_successfully(c: &mut Criterion) {
         .expect("Environment variable OSRM_TEST_DATA_PATH_MLD must be defined with a french map");
     let engine = OsrmEngine::new(&path, Algorithm::MLD).expect("Failed to initialize OSRM engine");
 
-    let request = TableRequest {
-        sources: vec![
-            Point {
-                longitude: 2.3522,
-                latitude: 48.8566,
-            }, // Paris
-        ],
-        destinations: vec![
+    let request = TableRequest::new(
+        vec![Point {
+            longitude: 2.3522,
+            latitude: 48.8566,
+        }], // Paris
+        vec![
             Point {
                 longitude: 5.3698,
                 latitude: 43.2965,
@@ -64,7 +58,7 @@ fn calculate_table_successfully(c: &mut Criterion) {
                 latitude: 45.7640,
             }, // Lyon
         ],
-    };
+    );
 
     c.bench_function("calculate_table_successfully", |b| {
         b.iter(|| {
@@ -83,19 +77,16 @@ fn calculate_route_successfully(c: &mut Criterion) {
         .expect("Environment variable OSRM_TEST_DATA_PATH_MLD must be defined with a french map");
     let engine = OsrmEngine::new(&path, Algorithm::MLD).expect("Failed to initialize OSRM engine");
 
-    let request = RouteRequestBuilder::default()
-        .points(vec![
-            Point {
-                longitude: 2.3522,
-                latitude: 48.8566,
-            },
-            Point {
-                longitude: 5.3698,
-                latitude: 43.2965,
-            },
-        ])
-        .build()
-        .expect("Failed to build RouteRequest");
+    let request = RouteRequest::new(vec![
+        Point {
+            longitude: 2.3522,
+            latitude: 48.8566,
+        },
+        Point {
+            longitude: 5.3698,
+            latitude: 43.2965,
+        },
+    ]);
 
     c.bench_function("calculate_route_successfully", |b| {
         b.iter(|| {
@@ -146,17 +137,19 @@ fn calculate_table_10_successfully_mld(c: &mut Criterion) {
 
     c.bench_function("calculate_table_10_successfully_mld", |b| {
         b.iter_batched(
-            || TableRequest {
-                sources: vec![Point {
-                    longitude: base_lon,
-                    latitude: base_lat,
-                }],
-                destinations: (0..10)
-                    .map(|_| Point {
-                        longitude: base_lon + rng.random_range(-0.1..0.1),
-                        latitude: base_lat + rng.random_range(-0.1..0.1),
-                    })
-                    .collect(),
+            || {
+                TableRequest::new(
+                    vec![Point {
+                        longitude: base_lon,
+                        latitude: base_lat,
+                    }],
+                    (0..10)
+                        .map(|_| Point {
+                            longitude: base_lon + rng.random_range(-0.1..0.1),
+                            latitude: base_lat + rng.random_range(-0.1..0.1),
+                        })
+                        .collect(),
+                )
             },
             |request| {
                 black_box(engine.table(&request).expect("Table request failed"));
@@ -178,17 +171,19 @@ fn calculate_table_100_successfully_mld(c: &mut Criterion) {
 
     c.bench_function("calculate_table_100_successfully_mld", |b| {
         b.iter_batched(
-            || TableRequest {
-                sources: vec![Point {
-                    longitude: base_lon,
-                    latitude: base_lat,
-                }],
-                destinations: (0..100)
-                    .map(|_| Point {
-                        longitude: base_lon + rng.random_range(-0.1..0.1),
-                        latitude: base_lat + rng.random_range(-0.1..0.1),
-                    })
-                    .collect(),
+            || {
+                TableRequest::new(
+                    vec![Point {
+                        longitude: base_lon,
+                        latitude: base_lat,
+                    }],
+                    (0..100)
+                        .map(|_| Point {
+                            longitude: base_lon + rng.random_range(-0.1..0.1),
+                            latitude: base_lat + rng.random_range(-0.1..0.1),
+                        })
+                        .collect(),
+                )
             },
             |request| {
                 black_box(engine.table(&request).expect("Table request failed"));

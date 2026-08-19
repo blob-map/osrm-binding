@@ -1,3 +1,5 @@
+//! Embedded Rust bindings for OSRM routing with CH and MLD datasets.
+
 pub mod algorithm;
 pub mod errors;
 pub mod osrm_engine;
@@ -6,7 +8,21 @@ pub mod route;
 pub mod tables;
 pub mod trip;
 pub mod waypoints;
-// src/lib.rs
+
+pub use algorithm::Algorithm;
+pub use errors::OsrmError;
+pub use osrm_engine::OsrmEngine;
+pub use point::{Point, PointBuilder};
+pub use route::{
+    Intersection, Lane, Leg, Route, RouteRequest, RouteRequestBuilder, RouteResponse, RouteStep,
+    SimpleRouteResponse, StepManeuver,
+};
+pub use tables::{TableLocation, TableRequest, TableRequestBuilder, TableResponse};
+pub use trip::{
+    TripDestination, TripRequest, TripRequestBuilder, TripResponse, TripSource, TripWaypoint,
+};
+pub use waypoints::Waypoint;
+
 use std::ffi::{CStr, CString, c_void};
 use std::os::raw::c_char;
 
@@ -42,12 +58,17 @@ unsafe extern "C" {
         osrm_instance: *mut c_void,
         coordinates: *const f64,
         num_coordinates: usize,
+        roundtrip: bool,
+        source_is_first: bool,
+        destination_is_last: bool,
+        steps: bool,
     ) -> OsrmResult;
 
     fn osrm_route(
         osrm_instance: *mut c_void,
         coordinates: *const f64,
         num_coordinates: usize,
+        steps: bool,
     ) -> OsrmResult;
 
     fn osrm_simple_route(
@@ -65,9 +86,9 @@ pub(crate) struct Osrm {
 }
 
 impl Osrm {
-    pub(crate) fn new(base_path: &str, algorithm: &str) -> Result<Self, String> {
+    pub(crate) fn new(base_path: &str, algorithm: Algorithm) -> Result<Self, String> {
         let c_path = CString::new(base_path).map_err(|e| e.to_string())?;
-        let c_algorithm = CString::new(algorithm).map_err(|e| e.to_string())?;
+        let c_algorithm = CString::new(algorithm.as_str()).map_err(|e| e.to_string())?;
         let instance = unsafe { osrm_create(c_path.as_ptr(), c_algorithm.as_ptr()) };
 
         if instance.is_null() {
@@ -77,17 +98,39 @@ impl Osrm {
         }
     }
 
-    pub(crate) fn trip(&self, coordinates: &[f64]) -> Result<String, String> {
+    pub(crate) fn trip(
+        &self,
+        coordinates: &[f64],
+        roundtrip: bool,
+        source_is_first: bool,
+        destination_is_last: bool,
+        steps: bool,
+    ) -> Result<String, String> {
         debug_assert_eq!(coordinates.len() % 2, 0);
-        let result =
-            unsafe { osrm_trip(self.instance, coordinates.as_ptr(), coordinates.len() / 2) };
+        let result = unsafe {
+            osrm_trip(
+                self.instance,
+                coordinates.as_ptr(),
+                coordinates.len() / 2,
+                roundtrip,
+                source_is_first,
+                destination_is_last,
+                steps,
+            )
+        };
         result_to_string(result)
     }
 
-    pub(crate) fn route(&self, coordinates: &[f64]) -> Result<String, String> {
+    pub(crate) fn route(&self, coordinates: &[f64], steps: bool) -> Result<String, String> {
         debug_assert_eq!(coordinates.len() % 2, 0);
-        let result =
-            unsafe { osrm_route(self.instance, coordinates.as_ptr(), coordinates.len() / 2) };
+        let result = unsafe {
+            osrm_route(
+                self.instance,
+                coordinates.as_ptr(),
+                coordinates.len() / 2,
+                steps,
+            )
+        };
         result_to_string(result)
     }
 
@@ -172,5 +215,9 @@ impl Drop for Osrm {
     }
 }
 
+// SAFETY: OSRM exposes query methods through `const` C++ methods and keeps mutable
+// query heaps in `thread_local` storage. Its own HTTP server shares one OSRM
+// instance across its worker-thread pool. Rust's ownership rules also ensure
+// `drop` cannot run while shared references are active.
 unsafe impl Send for Osrm {}
 unsafe impl Sync for Osrm {}
