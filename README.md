@@ -203,16 +203,16 @@ println!("{:?}", trip);
 
 ## 🔬 Tests
 
-The test suite uses routes between Paris, Lyon, and Marseille. From the Nix development shell, download the current France extract, prepare a shared OSRM v6.0.0 dataset for both MLD and CH, and populate `.env` automatically:
+The test suite uses routes between Paris, Lyon, and Marseille. From the Nix development shell, download the current France extract, prepare OSRM v6.0.0 car and bicycle datasets for both MLD and CH, and populate `.env` automatically:
 
 ```shell
 setup-test-data
 cargo test
 ```
 
-The first setup downloads and processes the full France dataset, so expect substantial disk, memory, and processing-time requirements. Downloads resume if interrupted, and completed data is reused on subsequent runs. The generated files live in `.test-data/` and are ignored by Git.
+The France PBF is downloaded only once and shared by both profiles. Car and bicycle still need separate processed routing graphs, so expect substantial disk, memory, and processing-time requirements. Downloads resume if interrupted, and completed data is reused on subsequent runs. The generated files live in `.test-data/` and are ignored by Git.
 
-To use data you prepared yourself instead, create `.env` with `OSRM_TEST_DATA_PATH_MLD` and `OSRM_TEST_DATA_PATH_CH`. The dataset version must match the linked OSRM version, and each path must use the preprocessing pipeline matching its algorithm.
+The generated `.env` contains `OSRM_TEST_DATA_PATH_MLD` and `OSRM_TEST_DATA_PATH_CH` for car routing, plus `OSRM_TEST_DATA_PATH_BICYCLE_MLD` and `OSRM_TEST_DATA_PATH_BICYCLE_CH` for bicycle routing. To use data you prepared yourself instead, set those paths manually. The dataset version must match the linked OSRM version, and each path must use the preprocessing pipeline matching its algorithm and transport profile.
 
 ### 🚀 Performance
 

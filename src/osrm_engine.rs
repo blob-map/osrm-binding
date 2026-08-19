@@ -1,5 +1,7 @@
 // osrm/src/lib.rs
 
+use std::borrow::Borrow;
+
 use crate::errors::OsrmError;
 use crate::point::Point;
 use crate::route::{RouteRequest, RouteResponse, SimpleRouteResponse};
@@ -18,95 +20,77 @@ impl OsrmEngine {
         Ok(OsrmEngine { instance: osrm })
     }
 
-    pub fn table(&self, table_request: TableRequest) -> Result<TableResponse, OsrmError> {
+    pub fn table(
+        &self,
+        table_request: impl Borrow<TableRequest>,
+    ) -> Result<TableResponse, OsrmError> {
+        let table_request = table_request.borrow();
         let len_sources = table_request.sources.len();
         let len_destinations = table_request.destinations.len();
         if len_sources == 0 || len_destinations == 0 {
             return Err(OsrmError::InvalidTableArgument);
         }
-        let sources_index: &[usize] = &(0..(len_sources)).collect::<Vec<usize>>()[..];
-        let destination_index: &[usize] =
-            &(len_sources..(len_sources + len_destinations)).collect::<Vec<usize>>()[..];
-        let coordinates: &[(f64, f64)] = &[table_request.sources, table_request.destinations]
-            .concat()
+        let mut coordinates = Vec::with_capacity((len_sources + len_destinations) * 2);
+        for point in table_request
+            .sources
             .iter()
-            .map(|s| (s.longitude, s.latitude))
-            .collect::<Vec<(f64, f64)>>()[..];
+            .chain(&table_request.destinations)
+        {
+            coordinates.extend_from_slice(&[point.longitude, point.latitude]);
+        }
         let result = self
             .instance
-            .table(coordinates, Some(sources_index), Some(destination_index))
-            .map_err(|e| OsrmError::FfiError(e))?;
-        serde_json::from_str::<TableResponse>(&result).map_err(|e| OsrmError::JsonParse(e))
+            .table(&coordinates, len_sources, len_destinations)
+            .map_err(OsrmError::FfiError)?;
+        serde_json::from_str::<TableResponse>(&result).map_err(OsrmError::JsonParse)
     }
 
-    pub fn route(&self, route_request: RouteRequest) -> Result<RouteResponse, OsrmError> {
+    pub fn route(
+        &self,
+        route_request: impl Borrow<RouteRequest>,
+    ) -> Result<RouteResponse, OsrmError> {
+        let route_request = route_request.borrow();
         let len = route_request.points.len();
         if len == 0 {
             return Err(OsrmError::InvalidTableArgument);
         }
-        let coordinates: &[(f64, f64)] = &route_request
-            .points
-            .iter()
-            .map(|p| (p.longitude, p.latitude))
-            .collect::<Vec<(f64, f64)>>()[..];
+        let mut coordinates = Vec::with_capacity(len * 2);
+        for point in &route_request.points {
+            coordinates.extend_from_slice(&[point.longitude, point.latitude]);
+        }
         let result = self
             .instance
-            .route(coordinates)
-            .map_err(|e| OsrmError::FfiError(e))?;
-        serde_json::from_str::<RouteResponse>(&result).map_err(|e| OsrmError::JsonParse(e))
+            .route(&coordinates)
+            .map_err(OsrmError::FfiError)?;
+        serde_json::from_str::<RouteResponse>(&result).map_err(OsrmError::JsonParse)
     }
 
-    pub fn trip(&self, trip_request: TripRequest) -> Result<TripResponse, OsrmError> {
+    pub fn trip(&self, trip_request: impl Borrow<TripRequest>) -> Result<TripResponse, OsrmError> {
+        let trip_request = trip_request.borrow();
         let len = trip_request.points.len();
         if len == 0 {
             return Err(OsrmError::InvalidTableArgument);
         }
-        let coordinates: &[(f64, f64)] = &trip_request
-            .points
-            .iter()
-            .map(|p| (p.longitude, p.latitude))
-            .collect::<Vec<(f64, f64)>>()[..];
+        let mut coordinates = Vec::with_capacity(len * 2);
+        for point in &trip_request.points {
+            coordinates.extend_from_slice(&[point.longitude, point.latitude]);
+        }
         let result = self
             .instance
-            .trip(coordinates)
-            .map_err(|e| OsrmError::FfiError(e))?;
-        serde_json::from_str::<TripResponse>(&result).map_err(|e| OsrmError::JsonParse(e))
+            .trip(&coordinates)
+            .map_err(OsrmError::FfiError)?;
+        serde_json::from_str::<TripResponse>(&result).map_err(OsrmError::JsonParse)
     }
 
     pub fn simple_route(&self, from: Point, to: Point) -> Result<SimpleRouteResponse, OsrmError> {
-        let coordinates: &[(f64, f64)] = &[from, to]
-            .iter()
-            .map(|p| (p.longitude, p.latitude))
-            .collect::<Vec<(f64, f64)>>()[..];
-        let result = self
+        let (distance, duration) = self
             .instance
-            .route(coordinates)
-            .map_err(|e| OsrmError::FfiError(e))?;
-        let route_response =
-            serde_json::from_str::<RouteResponse>(&result).map_err(|e| OsrmError::JsonParse(e))?;
-        if route_response.routes.len() == 0 {
-            return Err(OsrmError::ApiError(
-                "No route were returned between those 2 points".to_owned(),
-            ));
-        }
+            .simple_route(from.longitude, from.latitude, to.longitude, to.latitude)
+            .map_err(OsrmError::FfiError)?;
         Ok(SimpleRouteResponse {
-            code: route_response.code,
-            distance: route_response
-                .routes
-                .first()
-                .unwrap()
-                .legs
-                .first()
-                .unwrap()
-                .distance,
-            durations: route_response
-                .routes
-                .first()
-                .unwrap()
-                .legs
-                .first()
-                .unwrap()
-                .duration,
+            code: "Ok".to_owned(),
+            distance,
+            durations: duration,
         })
     }
 }
@@ -124,7 +108,7 @@ mod tests {
             "Environment variable OSRM_TEST_DATA_PATH_MLD must be defined with a french map",
         );
         let engine =
-            OsrmEngine::new(&*path, Algorithm::MLD).expect("Failed to initialize OSRM engine");
+            OsrmEngine::new(&path, Algorithm::MLD).expect("Failed to initialize OSRM engine");
 
         let request = TableRequest {
             sources: vec![
@@ -176,7 +160,7 @@ mod tests {
             "Environment variable OSRM_TEST_DATA_PATH_MLD must be defined with a french map",
         );
         let engine =
-            OsrmEngine::new(&*path, Algorithm::MLD).expect("Failed to initialize OSRM engine");
+            OsrmEngine::new(&path, Algorithm::MLD).expect("Failed to initialize OSRM engine");
 
         let request = RouteRequestBuilder::default()
             .points(vec![
@@ -223,7 +207,7 @@ mod tests {
             "Environment variable OSRM_TEST_DATA_PATH_MLD must be defined with a french map",
         );
         let engine =
-            OsrmEngine::new(&*path, Algorithm::MLD).expect("Failed to initialize OSRM engine");
+            OsrmEngine::new(&path, Algorithm::MLD).expect("Failed to initialize OSRM engine");
         let response = engine
             .simple_route(
                 Point {
@@ -242,4 +226,3 @@ mod tests {
         assert!(27000.0 < response.durations && response.durations < 30600.0); // between 7h30 and 8h30 (google map used)
     }
 }
-

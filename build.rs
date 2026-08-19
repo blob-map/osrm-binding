@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 
 fn main() {
+    println!("cargo:rerun-if-changed=src/wrapper.cpp");
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
 
     // The OSRM version this crate links against must match the version of the
@@ -38,7 +39,7 @@ fn main() {
         .env("CXXFLAGS", cxx_flags)
         .define("CMAKE_CXX_STANDARD", "17")
         .define("CMAKE_CXX_STANDARD_REQUIRED", "ON")
-        .define("CMAKE_CXX_FLAGS_RELEASE", "-DNDEBUG")
+        .define("CMAKE_CXX_FLAGS_RELEASE", "-O2 -DNDEBUG")
         .define("ENABLE_ASSERTIONS", "Off")
         .define("ENABLE_LTO", "Off")
         .build();

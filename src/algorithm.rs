@@ -1,12 +1,14 @@
-pub enum Algorithm{
-    MLD, CH
+pub enum Algorithm {
+    MLD,
+    CH,
 }
 
-impl Algorithm{
-    pub fn as_str(&self) -> &str{
+impl Algorithm {
+    pub fn as_str(&self) -> &str {
         match self {
             Algorithm::MLD => "MLD",
-            Algorithm::CH => "CH"
+            Algorithm::CH => "CH",
         }
     }
 }
+

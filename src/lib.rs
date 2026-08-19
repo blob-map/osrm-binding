@@ -1,13 +1,13 @@
 pub mod algorithm;
 pub mod errors;
-pub mod tables;
-pub mod trip;
+pub mod osrm_engine;
 pub mod point;
 pub mod route;
+pub mod tables;
+pub mod trip;
 pub mod waypoints;
-pub mod osrm_engine;
 // src/lib.rs
-use std::ffi::{c_void, CStr, CString};
+use std::ffi::{CStr, CString, c_void};
 use std::os::raw::c_char;
 
 #[repr(C)]
@@ -16,31 +16,47 @@ struct OsrmResult {
     message: *mut c_char,
 }
 
+#[repr(C)]
+struct OsrmSimpleRouteResult {
+    code: i32,
+    distance: f64,
+    duration: f64,
+    message: *mut c_char,
+}
+
 #[link(name = "osrm_wrapper", kind = "static")]
 unsafe extern "C" {
-    fn osrm_create(base_path: *const c_char, algorithm : *const c_char) -> *mut c_void;
+    fn osrm_create(base_path: *const c_char, algorithm: *const c_char) -> *mut c_void;
+
     fn osrm_destroy(osrm_instance: *mut c_void);
+
     fn osrm_table(
         osrm_instance: *mut c_void,
         coordinates: *const f64,
         num_coordinates: usize,
-        sources: *const usize,
         num_sources: usize,
-        destinations: *const usize,
         num_destinations: usize,
     ) -> OsrmResult;
 
     fn osrm_trip(
         osrm_instance: *mut c_void,
         coordinates: *const f64,
-        num_coordinates: usize
+        num_coordinates: usize,
     ) -> OsrmResult;
 
     fn osrm_route(
         osrm_instance: *mut c_void,
         coordinates: *const f64,
-        num_coordinates: usize
+        num_coordinates: usize,
     ) -> OsrmResult;
+
+    fn osrm_simple_route(
+        osrm_instance: *mut c_void,
+        from_longitude: f64,
+        from_latitude: f64,
+        to_longitude: f64,
+        to_latitude: f64,
+    ) -> OsrmSimpleRouteResult;
     fn osrm_free_string(s: *mut c_char);
 }
 
@@ -61,99 +77,91 @@ impl Osrm {
         }
     }
 
-    pub(crate) fn trip(&self, coordinates: &[(f64, f64)]) -> Result<String, String> {
-
-        let coords : Vec<f64> = coordinates.iter().flat_map(|&(lon, lat)| vec![lon, lat]).collect();
-        let result = unsafe {
-            osrm_trip(self.instance, coords.as_ptr(), coordinates.len() )
-        };
-
-        let message_ptr = result.message;
-        if message_ptr.is_null() {
-            return Err("OSRM returned a null message".to_string());
-        }
-
-        let c_str = unsafe { CStr::from_ptr(message_ptr) };
-        let rust_str = c_str.to_str().map_err(|e| e.to_string())?.to_owned();
-
-        unsafe {
-            osrm_free_string(message_ptr);
-        }
-
-        if result.code != 0 {
-            return Err(format!("OSRM error: {}", rust_str));
-        }
-
-        Ok(rust_str)
+    pub(crate) fn trip(&self, coordinates: &[f64]) -> Result<String, String> {
+        debug_assert_eq!(coordinates.len() % 2, 0);
+        let result =
+            unsafe { osrm_trip(self.instance, coordinates.as_ptr(), coordinates.len() / 2) };
+        result_to_string(result)
     }
 
-    pub(crate) fn route(&self, coordinates: &[(f64, f64)]) -> Result<String, String> {
+    pub(crate) fn route(&self, coordinates: &[f64]) -> Result<String, String> {
+        debug_assert_eq!(coordinates.len() % 2, 0);
+        let result =
+            unsafe { osrm_route(self.instance, coordinates.as_ptr(), coordinates.len() / 2) };
+        result_to_string(result)
+    }
 
-        let coords : Vec<f64> = coordinates.iter().flat_map(|&(lon, lat)| vec![lon, lat]).collect();
+    pub(crate) fn simple_route(
+        &self,
+        from_longitude: f64,
+        from_latitude: f64,
+        to_longitude: f64,
+        to_latitude: f64,
+    ) -> Result<(f64, f64), String> {
         let result = unsafe {
-            osrm_route(self.instance, coords.as_ptr(), coordinates.len() )
+            osrm_simple_route(
+                self.instance,
+                from_longitude,
+                from_latitude,
+                to_longitude,
+                to_latitude,
+            )
         };
 
-        let message_ptr = result.message;
-        if message_ptr.is_null() {
-            return Err("OSRM returned a null message".to_string());
+        if result.code == 0 {
+            return Ok((result.distance, result.duration));
         }
 
-        let c_str = unsafe { CStr::from_ptr(message_ptr) };
-        let rust_str = c_str.to_str().map_err(|e| e.to_string())?.to_owned();
-
-        unsafe {
-            osrm_free_string(message_ptr);
-        }
-
-        if result.code != 0 {
-            return Err(format!("OSRM error: {}", rust_str));
-        }
-
-        Ok(rust_str)
+        Err(take_message(result.message)
+            .map(|message| format!("OSRM error: {message}"))
+            .unwrap_or_else(|error| error))
     }
 
     pub(crate) fn table(
         &self,
-        coordinates: &[(f64, f64)],
-        sources: Option<&[usize]>,
-        destinations: Option<&[usize]>,
+        coordinates: &[f64],
+        num_sources: usize,
+        num_destinations: usize,
     ) -> Result<String, String> {
-
-        let flat_coords: Vec<f64> = coordinates.iter().flat_map(|&(lon, lat)| vec![lon, lat]).collect();
-        let sources_vec = sources.unwrap_or(&[]).to_vec();
-        let dests_vec = destinations.unwrap_or(&[]).to_vec();
+        debug_assert_eq!(coordinates.len(), (num_sources + num_destinations) * 2);
 
         let result = unsafe {
             osrm_table(
                 self.instance,
-                flat_coords.as_ptr(),
-                coordinates.len(),
-                sources_vec.as_ptr(),
-                sources_vec.len(),
-                dests_vec.as_ptr(),
-                dests_vec.len(),
+                coordinates.as_ptr(),
+                num_sources + num_destinations,
+                num_sources,
+                num_destinations,
             )
         };
-
-        let message_ptr = result.message;
-        if message_ptr.is_null() {
-            return Err("OSRM returned a null message".to_string());
-        }
-
-        let c_str = unsafe { CStr::from_ptr(message_ptr) };
-        let rust_str = c_str.to_str().map_err(|e| e.to_string())?.to_owned();
-
-        unsafe {
-            osrm_free_string(message_ptr);
-        }
-
-        if result.code != 0 {
-            return Err(format!("OSRM error: {}", rust_str));
-        }
-
-        Ok(rust_str)
+        result_to_string(result)
     }
+}
+
+fn result_to_string(result: OsrmResult) -> Result<String, String> {
+    let message = take_message(result.message)?;
+    if result.code == 0 {
+        Ok(message)
+    } else {
+        Err(format!("OSRM error: {message}"))
+    }
+}
+
+fn take_message(message_ptr: *mut c_char) -> Result<String, String> {
+    if message_ptr.is_null() {
+        return Err("OSRM returned a null message".to_string());
+    }
+
+    let message = unsafe { CStr::from_ptr(message_ptr) }
+        .to_str()
+        .map(str::to_owned)
+        .map_err(|error| error.to_string());
+
+    unsafe {
+        osrm_free_string(message_ptr);
+    }
+
+    message
 }
 
 impl Drop for Osrm {
